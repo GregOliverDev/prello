@@ -8,9 +8,6 @@ db = SQLAlchemy()
 class Member(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
-    fullName = db.Column(db.String(128))
-    avatar = db.Column(db.String(256))
-    role = db.Column(db.String(32))
     password_hash = db.Column(db.String(128), nullable=False)
 
     def set_password(self, password):
@@ -54,24 +51,11 @@ class Board(db.Model):
     name = db.Column(db.String(128))
     background = db.Column(db.String(64))
     visibility = db.Column(db.String(32))
-    workspace_id = db.Column(db.Integer, db.ForeignKey('workspace.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
 
     lists = db.relationship('List', backref='board', lazy=True)
     members = db.relationship('Member', secondary='board_member', backref='boards')
     labels = db.relationship('Label', secondary='board_label', backref='boards')
-
-# Workspace
-class Workspace(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(128))
-    boards = db.relationship('Board', backref='workspace', lazy=True)
-    members = db.relationship('Member', secondary='workspace_member', backref='workspaces')
-
-# Association tables
-workspace_member = db.Table('workspace_member',
-    db.Column('workspace_id', db.Integer, db.ForeignKey('workspace.id')),
-    db.Column('member_id', db.Integer, db.ForeignKey('member.id'))
-)
 
 board_member = db.Table('board_member',
     db.Column('board_id', db.Integer, db.ForeignKey('board.id')),

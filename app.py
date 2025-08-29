@@ -1,18 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for
 from flask_login import login_required, login_user, logout_user
-from models import db, Workspace, Board, List, Card, Member
+from models import db, Board, List, Card, Member
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///prello.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
-
-
-@app.route("/")
-def index():
-    workspaces = Workspace.query.all()
-    return render_template("index.html", workspaces=workspaces)
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -29,7 +23,7 @@ def register():
         return redirect(url_for('login'))
     return render_template('register.html')
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form['username']
@@ -47,67 +41,6 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('login'))
-
-
-@app.route("/workspace/create", methods=["GET", "POST"])
-def create_workspace():
-    if request.method == "POST":
-        name = request.form.get("name")
-        if name:
-            workspace = Workspace(name=name)
-            db.session.add(workspace)
-            db.session.commit()
-            return redirect(url_for("index"))
-    return render_template("workspace_create.html")
-
-
-@app.route("/workspace/<int:workspace_id>")
-def workspace_detail(workspace_id):
-    workspace = Workspace.query.get_or_404(workspace_id)
-    boards = Board.query.filter_by(workspace_id=workspace.id).all()
-    return render_template("workspace_detail.html", workspace=workspace, boards=boards)
-
-
-@app.route("/workspace/<int:workspace_id>/board/create", methods=["GET", "POST"])
-def create_board(workspace_id):
-    workspace = Workspace.query.get_or_404(workspace_id)
-    if request.method == "POST":
-        name = request.form.get("name")
-        background = request.form.get("background") or "#e5e5e5"
-        visibility = request.form.get("visibility") or "private"
-        if name:
-            board = Board(
-                name=name,
-                background=background,
-                visibility=visibility,
-                workspace_id=workspace.id,
-            )
-            db.session.add(board)
-            db.session.commit()
-            return redirect(url_for("workspace_detail", workspace_id=workspace.id))
-    return render_template("board_create.html", workspace=workspace)
-
-
-@app.route("/workspace/<int:workspace_id>/edit", methods=["GET", "POST"])
-def edit_workspace(workspace_id):
-    workspace = Workspace.query.get_or_404(workspace_id)
-    if request.method == "POST":
-        workspace.name = request.form.get("name")
-        db.session.commit()
-        return redirect(url_for("index"))
-    return render_template("workspace_edit.html", workspace=workspace)
-
-
-@app.route("/workspace/<int:workspace_id>/delete", methods=["POST"])
-def delete_workspace(workspace_id):
-    workspace = Workspace.query.get_or_404(workspace_id)
-    if workspace.boards:  # Se o workspace tem boards associados
-        error = "Não é possível excluir o workspace. Primeiro exclua todos os boards que pertencem a este workspace."
-        workspaces = Workspace.query.all()
-        return render_template("index.html", workspaces=workspaces, error=error)
-    db.session.delete(workspace)
-    db.session.commit()
-    return redirect(url_for("index"))
 
 
 @app.route("/board/<int:board_id>")
@@ -141,7 +74,7 @@ def edit_board(board_id):
         board.background = request.form.get("background") or "#e5e5e5"
         board.visibility = request.form.get("visibility") or "private"
         db.session.commit()
-        return redirect(url_for("workspace_detail", workspace_id=board.workspace_id))
+        return redirect(url_for("login"))
     return render_template("board_edit.html", board=board)
 
 
@@ -149,17 +82,12 @@ def edit_board(board_id):
 def delete_board(board_id):
     board = Board.query.get_or_404(board_id)
     if board.lists:  # Se o board tem listas associadas
-        workspace_id = board.workspace_id
+        user_id = board.user_id
         error = "Não é possível excluir o board. Primeiro exclua todas as listas que pertencem a este board."
-        boards = Board.query.filter_by(workspace_id=workspace_id).all()
-        workspace = Workspace.query.get_or_404(workspace_id)
-        return render_template(
-            "workspace_detail.html", workspace=workspace, boards=boards, error=error
-        )
-    workspace_id = board.workspace_id
+        boards = Board.query.filter_by(user_id=user_id).all()
+    user_id = board.user_id
     db.session.delete(board)
     db.session.commit()
-    return redirect(url_for("workspace_detail", workspace_id=workspace_id))
 
 
 @app.route("/list/<int:list_id>/card/create", methods=["GET", "POST"])
