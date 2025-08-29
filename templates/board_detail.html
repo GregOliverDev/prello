@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Board: {{ board.name }}</h2>
+<a class="button" href="{{ url_for('create_list', board_id=board.id) }}">+ Criar nova Lista</a>
+<br><br>
+{% if error %}
+<div style="color:red;">{{ error }}</div>
+{% endif %}
+<div style="display: flex; gap: 2rem;">
+    {% for list in lists %}
+        <div class="list">
+            <h3>{{ list.name }}</h3>
+            <a class="button" href="{{ url_for('create_card', list_id=list.id) }}" style="margin-bottom:10px;">+ Adicionar Card</a>
+            <ul>
+            {% for card in list.cards %}
+                <li class="card">
+                    <a href="{{ url_for('card_detail', card_id=card.id) }}">{{ card.name }}</a>
+                </li>
+            {% else %}
+                <li style="color:#888;">Nenhum card</li>
+            {% endfor %}
+            </ul>
+            <a href="{{ url_for('edit_list', list_id=list.id) }}">Editar Lista</a>
+            <form action="{{ url_for('delete_list', list_id=list.id) }}" method="post" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta lista?');">
+                <button type="submit" style="color:red;">Excluir Lista</button>
+            </form>
+        </div>
+    {% endfor %}
+</div>
+<a href="{{ url_for('workspace_detail', workspace_id=board.workspace_id) }}">← Voltar ao Workspace</a>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Bem-vindo ao Prello!</h2>
+<p>Seu gerenciador de projetos inspirado no Trello usando Python e Flask.</p>
+
+<a class="button" href="{{ url_for('create_workspace') }}">+ Criar novo Workspace</a>
+
+{% if error %}
+<div style="color:red;">{{ error }}</div>
+{% endif %}
+{% if workspaces %}
+    <h3>Seus Workspaces</h3>
+    <ul>
+    {% for ws in workspaces %}
+        <li class="workspace">
+            <a href="{{ url_for('workspace_detail', workspace_id=ws.id) }}">{{ ws.name }}</a>
+            <a href="{{ url_for('edit_workspace', workspace_id=ws.id) }}">Editar</a>
+            <form action="{{ url_for('delete_workspace', workspace_id=ws.id) }}" method="post" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir este workspace?');">
+                <button type="submit" style="color:red;">Excluir</button>
+            </form>
+        </li>
+    {% endfor %}
+    </ul>
+{% endif %}
+{% endblock %}

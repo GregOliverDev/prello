@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Criar Board em "{{ workspace.name }}"</h2>
+<form method="post">
+    <label for="name">Nome do Board:</label><br>
+    <input type="text" id="name" name="name" required><br><br>
+    <label for="background">Cor de fundo:</label><br>
+    <input type="color" id="background" name="background" value="#e5e5e5"><br><br>
+    <label for="visibility">Visibilidade:</label><br>
+    <select id="visibility" name="visibility">
+        <option value="private">Privado</option>
+        <option value="public">Público</option>
+    </select><br><br>
+    <button type="submit">Criar</button>
+    <a href="{{ url_for('workspace_detail', workspace_id=workspace.id) }}">Cancelar</a>
+</form>
+{% endblock %}
