@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Editar Tarefa{% endblock %}
+{% block content %}
+<h2>Editar Tarefa</h2>
+<form method="POST">
+  <div class="mb-3">
+    <label for="titulo" class="form-label">Título</label>
+    <input type="text" class="form-control" name="titulo" value="{{ tarefa.title }}" required>
+  </div>
+  <div class="mb-3">
+    <label for="descricao" class="form-label">Descrição</label>
+    <textarea class="form-control" name="descricao" rows="3">{{ tarefa.description }}</textarea>
+  </div>
+  <div class="mb-3">
+    <label for="status" class="form-label">Status</label>
+    <select class="form-select" name="status">
+      <option value="pendente" {% if tarefa.status=="pendente" %}selected{% endif %}>Pendente</option>
+      <option value="em andamento" {% if tarefa.status=="em andamento" %}selected{% endif %}>Em andamento</option>
+      <option value="concluída" {% if tarefa.status=="concluída" %}selected{% endif %}>Concluída</option>
+    </select>
+  </div>
+  <div class="mb-3">
+    <label for="atribuir" class="form-label">Atribuir a</label>
+    <select class="form-select" name="atribuir">
+      <option value="">Ninguém</option>
+      {% for usuario in usuarios %}
+        {% if usuario.id != current_user.id %}
+        <option value="{{ usuario.id }}" {% if tarefa.assigned_to_id==usuario.id %}selected{% endif %}>{{ usuario.username }}</option>
+        {% endif %}
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-success">Salvar</button>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Cancelar</a>
+</form>
+{% endblock %}

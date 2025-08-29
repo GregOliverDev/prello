@@ -1,174 +1,172 @@
-from flask import Flask, render_template, request, redirect, url_for
-from flask_login import login_required, login_user, logout_user
-from models import db, Board, List, Card, Member
+from flask import Flask, render_template, redirect, url_for, request, flash, session
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import (
+    LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+)
 from werkzeug.security import generate_password_hash, check_password_hash
+import os
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///prello.db"
+app.config["SECRET_KEY"] = "segredo-super-seguro"
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///tarefas.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-db.init_app(app)
+
+db = SQLAlchemy(app)
+login_manager = LoginManager(app)
+login_manager.login_view = "login"
 
 
-@app.route('/register', methods=['GET', 'POST'])
+# MODELOS
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+
+    tasks = db.relationship(
+        "Task",
+        backref="owner",
+        lazy=True,
+        foreign_keys='Task.owner_id'   # <-- especifica a FK correta
+    )
+    assigned_tasks = db.relationship(
+        "Task",
+        backref="assigned_to_user",
+        lazy=True,
+        foreign_keys='Task.assigned_to_id'
+    )
+
+class Task(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.Text)
+    status = db.Column(db.String(20), default="pendente")
+    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    assigned_to_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+
+# ROTAS DE AUTENTICAÇÃO
+@app.route("/register", methods=["GET", "POST"])
 def register():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        if Member.query.filter_by(username=username).first():
-            return render_template('register.html', error="Usuário já existe.")
-        member = Member(username=username)
-        member.set_password(password)
-        db.session.add(member)
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+        if User.query.filter_by(username=username).first():
+            flash("Nome de usuário já existe.", "danger")
+            return redirect(url_for("register"))
+        hashed = generate_password_hash(password)
+        user = User(username=username, password=hashed)
+        db.session.add(user)
         db.session.commit()
-        return redirect(url_for('login'))
-    return render_template('register.html')
+        flash("Usuário cadastrado! Faça login.", "success")
+        return redirect(url_for("login"))
+    return render_template("register.html")
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route("/login", methods=["GET", "POST"])
 def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        member = Member.query.filter_by(username=username).first()
-        if member and member.check_password(password):
-            login_user(member)
-            return redirect(url_for('index'))
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+        user = User.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            return redirect(url_for("dashboard"))
         else:
-            return render_template('login.html', error="Usuário ou senha inválidos.")
-    return render_template('login.html')
+            flash("Usuário ou senha incorretos.", "danger")
+    return render_template("login.html")
 
-@app.route('/logout')
+@app.route("/logout")
 @login_required
 def logout():
     logout_user()
-    return redirect(url_for('login'))
+    return redirect(url_for("login"))
 
 
-@app.route("/board/<int:board_id>")
-def board_detail(board_id):
-    board = Board.query.get_or_404(board_id)
-    lists = List.query.filter_by(board_id=board.id).order_by(List.position).all()
-    return render_template("board_detail.html", board=board, lists=lists)
+# ROTAS PRINCIPAIS
+@app.route("/")
+def index():
+    return redirect(url_for("dashboard"))
 
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    filtro = request.args.get("filtro", "todas")
+    usuarios = User.query.all()
+    if filtro == "minhas":
+        tarefas = Task.query.filter_by(owner_id=current_user.id).order_by(Task.id.desc()).all()
+    elif filtro == "atribuídas":
+        tarefas = Task.query.filter_by(assigned_to_id=current_user.id).order_by(Task.id.desc()).all()
+    elif filtro in ["pendente", "em andamento", "concluída"]:
+        tarefas = Task.query.filter(
+            ((Task.owner_id == current_user.id) | (Task.assigned_to_id == current_user.id)) &
+            (Task.status == filtro)
+        ).order_by(Task.id.desc()).all()
+    else:
+        tarefas = Task.query.filter(
+            (Task.owner_id == current_user.id) | (Task.assigned_to_id == current_user.id)
+        ).order_by(Task.id.desc()).all()
+    return render_template(
+        "dashboard.html",
+        tarefas=tarefas, usuarios=usuarios, filtro=filtro
+    )
 
-@app.route("/board/<int:board_id>/list/create", methods=["GET", "POST"])
-def create_list(board_id):
-    board = Board.query.get_or_404(board_id)
+@app.route("/criar", methods=["GET", "POST"])
+@login_required
+def criar_tarefa():
+    usuarios = User.query.all()
     if request.method == "POST":
-        name = request.form.get("name")
-        position = request.form.get("position") or 1
-        if name:
-            new_list = List(
-                name=name, position=position, board_id=board.id, closed=False
-            )
-            db.session.add(new_list)
-            db.session.commit()
-            return redirect(url_for("board_detail", board_id=board.id))
-    return render_template("list_create.html", board=board)
-
-
-@app.route("/board/<int:board_id>/edit", methods=["GET", "POST"])
-def edit_board(board_id):
-    board = Board.query.get_or_404(board_id)
-    if request.method == "POST":
-        board.name = request.form.get("name")
-        board.background = request.form.get("background") or "#e5e5e5"
-        board.visibility = request.form.get("visibility") or "private"
-        db.session.commit()
-        return redirect(url_for("login"))
-    return render_template("board_edit.html", board=board)
-
-
-@app.route("/board/<int:board_id>/delete", methods=["POST"])
-def delete_board(board_id):
-    board = Board.query.get_or_404(board_id)
-    if board.lists:  # Se o board tem listas associadas
-        user_id = board.user_id
-        error = "Não é possível excluir o board. Primeiro exclua todas as listas que pertencem a este board."
-        boards = Board.query.filter_by(user_id=user_id).all()
-    user_id = board.user_id
-    db.session.delete(board)
-    db.session.commit()
-
-
-@app.route("/list/<int:list_id>/card/create", methods=["GET", "POST"])
-def create_card(list_id):
-    lista = List.query.get_or_404(list_id)
-    if request.method == "POST":
-        name = request.form.get("name")
-        description = request.form.get("description")
-        position = request.form.get("position") or 1
-        if name:
-            card = Card(
-                name=name,
-                description=description,
-                position=position,
-                list_id=lista.id,
-                archived=False,
-            )
-            db.session.add(card)
-            db.session.commit()
-            return redirect(url_for("board_detail", board_id=lista.board_id))
-    return render_template("card_create.html", lista=lista)
-
-
-@app.route("/list/<int:list_id>/edit", methods=["GET", "POST"])
-def edit_list(list_id):
-    lista = List.query.get_or_404(list_id)
-    if request.method == "POST":
-        lista.name = request.form.get("name")
-        lista.position = request.form.get("position") or 1
-        db.session.commit()
-        return redirect(url_for("board_detail", board_id=lista.board_id))
-    return render_template("list_edit.html", lista=lista)
-
-
-@app.route("/list/<int:list_id>/delete", methods=["POST"])
-def delete_list(list_id):
-    lista = List.query.get_or_404(list_id)
-    if lista.cards:  # Se a lista tem cards associados
-        # Retorne para o board com uma mensagem de erro
-        board_id = lista.board_id
-        error = "Não é possível excluir a lista. Primeiro exclua todos os cards que pertencem a ela."
-        # Você pode passar a mensagem de erro para o template do board
-        lists = List.query.filter_by(board_id=board_id).order_by(List.position).all()
-        board = Board.query.get_or_404(board_id)
-        return render_template(
-            "board_detail.html", board=board, lists=lists, error=error
+        titulo = request.form["titulo"]
+        descricao = request.form["descricao"]
+        status = request.form["status"]
+        atribuir = request.form.get("atribuir")
+        tarefa = Task(
+            title=titulo, description=descricao, status=status,
+            owner_id=current_user.id,
+            assigned_to_id=atribuir if atribuir != "" else None
         )
-    board_id = lista.board_id
-    db.session.delete(lista)
-    db.session.commit()
-    return redirect(url_for("board_detail", board_id=board_id))
-
-
-@app.route("/card/<int:card_id>")
-def card_detail(card_id):
-    card = Card.query.get_or_404(card_id)
-    return render_template("card_detail.html", card=card)
-
-
-@app.route("/card/<int:card_id>/edit", methods=["GET", "POST"])
-def edit_card(card_id):
-    card = Card.query.get_or_404(card_id)
-    if request.method == "POST":
-        card.name = request.form.get("name")
-        card.description = request.form.get("description")
-        card.position = request.form.get("position") or 1
+        db.session.add(tarefa)
         db.session.commit()
-        return redirect(url_for("card_detail", card_id=card.id))
-    return render_template("card_edit.html", card=card)
+        flash("Tarefa criada com sucesso.", "success")
+        return redirect(url_for("dashboard"))
+    return render_template("criar_tarefa.html", usuarios=usuarios)
 
+@app.route("/editar/<int:id>", methods=["GET", "POST"])
+@login_required
+def editar_tarefa(id):
+    tarefa = Task.query.get_or_404(id)
+    if tarefa.owner_id != current_user.id and (tarefa.assigned_to_id != current_user.id):
+        flash("Você não tem permissão para editar esta tarefa.", "danger")
+        return redirect(url_for("dashboard"))
+    usuarios = User.query.all()
+    if request.method == "POST":
+        tarefa.title = request.form["titulo"]
+        tarefa.description = request.form["descricao"]
+        tarefa.status = request.form["status"]
+        atribuir = request.form.get("atribuir")
+        tarefa.assigned_to_id = atribuir if atribuir != "" else None
+        db.session.commit()
+        flash("Tarefa atualizada.", "success")
+        return redirect(url_for("dashboard"))
+    return render_template("editar_tarefa.html", tarefa=tarefa, usuarios=usuarios)
 
-@app.route("/card/<int:card_id>/delete", methods=["POST"])
-def delete_card(card_id):
-    card = Card.query.get_or_404(card_id)
-    board_id = card.list.board_id
-    db.session.delete(card)
+@app.route("/excluir/<int:id>", methods=["POST"])
+@login_required
+def excluir_tarefa(id):
+    tarefa = Task.query.get_or_404(id)
+    if tarefa.owner_id != current_user.id:
+        flash("Você não tem permissão para excluir esta tarefa.", "danger")
+        return redirect(url_for("dashboard"))
+    db.session.delete(tarefa)
     db.session.commit()
-    return redirect(url_for("board_detail", board_id=board_id))
+    flash("Tarefa excluída.", "success")
+    return redirect(url_for("dashboard"))
 
 
 if __name__ == "__main__":
     with app.app_context():
-        db.create_all()
-    app.run(debug=True, use_reloader=False)
+        db.create_all()  # cria as tabelas dentro do contexto do app
+    app.run(debug=True)

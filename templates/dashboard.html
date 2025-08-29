@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h2>Dashboard</h2>
+<div class="mb-3">
+  <a href="{{ url_for('criar_tarefa') }}" class="btn btn-primary">+ Nova Tarefa</a>
+</div>
+<form method="get" class="row g-2 mb-3">
+  <div class="col-auto">
+    <select name="filtro" class="form-select" onchange="this.form.submit()">
+      <option value="todas" {% if filtro == "todas" %}selected{% endif %}>Todas</option>
+      <option value="pendente" {% if filtro == "pendente" %}selected{% endif %}>Pendentes</option>
+      <option value="em andamento" {% if filtro == "em andamento" %}selected{% endif %}>Em andamento</option>
+      <option value="concluída" {% if filtro == "concluída" %}selected{% endif %}>Concluídas</option>
+    </select>
+  </div>
+</form>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Título</th>
+      <th>Descrição</th>
+      <th>Status</th>
+      <th>Responsável</th>
+      <th>Atribuída a</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for t in tarefas %}
+    <tr>
+      <td>{{ t.title }}</td>
+      <td>{{ t.description }}</td>
+      <td>
+        {% if t.status == "pendente" %}
+          <span class="badge bg-secondary">Pendente</span>
+        {% elif t.status == "em andamento" %}
+          <span class="badge bg-warning text-dark">Em Andamento</span>
+        {% else %}
+          <span class="badge bg-success">Concluída</span>
+        {% endif %}
+      </td>
+      <td>{{ t.owner.username }}</td>
+      <td>{% if t.assigned_to_user %}{{ t.assigned_to_user.username }}{% else %}-{% endif %}</td>
+      <td>
+        <a href="{{ url_for('editar_tarefa', id=t.id) }}" class="btn btn-sm btn-outline-primary">Editar</a>
+        {% if t.owner_id == current_user.id %}
+        <form method="POST" action="{{ url_for('excluir_tarefa', id=t.id) }}" style="display:inline;" onsubmit="return confirm('Excluir esta tarefa?');">
+          <button type="submit" class="btn btn-sm btn-outline-danger">Excluir</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

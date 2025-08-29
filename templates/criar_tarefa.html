@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Nova Tarefa{% endblock %}
+{% block content %}
+<h2>Nova Tarefa</h2>
+<form method="POST">
+  <div class="mb-3">
+    <label for="titulo" class="form-label">Título</label>
+    <input type="text" class="form-control" name="titulo" required>
+  </div>
+  <div class="mb-3">
+    <label for="descricao" class="form-label">Descrição</label>
+    <textarea class="form-control" name="descricao" rows="3"></textarea>
+  </div>
+  <div class="mb-3">
+    <label for="status" class="form-label">Status</label>
+    <select class="form-select" name="status">
+      <option value="pendente">Pendente</option>
+      <option value="em andamento">Em andamento</option>
+      <option value="concluída">Concluída</option>
+    </select>
+  </div>
+  <div class="mb-3">
+    <label for="atribuir" class="form-label">Atribuir a</label>
+    <select class="form-select" name="atribuir">
+      <option value="">Ninguém</option>
+      {% for usuario in usuarios %}
+        <option value="{{ usuario.id }}">{{ usuario.username }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-success">Criar</button>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Cancelar</a>
+</form>
+{% endblock %}
